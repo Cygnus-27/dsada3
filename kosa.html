@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flight Route Network Analyzer (Kosaraju SCC)</title>
+  <style>
+    /* --- GENERAL STYLES --- */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #000000 0%, #0a0a0a 100%);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+    
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(5, 150, 105, 0.08) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    
+    .container {
+      width: 100%;
+      max-width: 1400px; 
+      padding: 20px;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    h1 {
+      color: #10b981;
+      margin: 20px auto 30px;
+      font-weight: 800;
+      font-size: 2.5em;
+      letter-spacing: -0.5px;
+      text-align: center;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 40px rgba(16, 185, 129, 0.3);
+      animation: glow 3s ease-in-out infinite alternate;
+    }
+    
+    @keyframes glow {
+      from { filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.5)); }
+      to { filter: drop-shadow(0 0 30px rgba(5, 150, 105, 0.6)); }
+    }
+    
+    /* --- CONTROL BAR --- */
+    .controls-wrapper {
+      width: 100%;
+      max-width: 1400px;
+      z-index: 50; 
+      padding: 0 20px;
+      position: sticky;
+      top: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .controls {
+      display: flex;
+      flex-wrap: wrap; 
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(16, 185, 129, 0.2),
+        inset 0 1px 0 rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    
+    /* Enhanced Button Styles */
+    button { 
+      padding: 12px 24px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      font-size: 0.95em;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+    
+    button:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+    
+    button:disabled { 
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+    
+    button span {
+      position: relative;
+      z-index: 1;
+    }
+    
+    .btn { 
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+      color: #ffffff;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    } 
+    
+    .btn:hover:not(:disabled) { 
+      background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(16, 185, 129, 0.3);
+      border-color: rgba(16, 185, 129, 0.5);
+    }
+    
+    .btn-emerald { 
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #000000;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.5);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+    } 
+    
+    .btn-emerald:hover:not(:disabled) { 
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.6);
+    }
+    
+    .btn-red { 
+      background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+      color: white;
+      box-shadow: 0 4px 20px rgba(244, 63, 94, 0.4);
+    } 
+    
+    .btn-red:hover:not(:disabled) { 
+      background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 30px rgba(244, 63, 94, 0.5);
+    }
+    
+    .btn-yellow { 
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #000000;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+    }
+    
+    .btn-yellow:hover:not(:disabled) { 
+      background: linear-gradient(135deg, #059669 0%, #047857 100%);
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.5);
+    }
+    
+    #edgeModeBtn { 
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+      color: #10b981;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    } 
+    
+    #edgeModeBtn.active { 
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #000000;
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.7);
+      transform: scale(1.05);
+      animation: pulse 2s ease-in-out infinite;
+      border-color: rgba(16, 185, 129, 0.8);
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1.05); }
+      50% { transform: scale(1.08); }
+    }
+
+    .generator-input { 
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    
+    .generator-input input[type="number"] { 
+      background: rgba(0, 0, 0, 0.8);
+      color: #ffffff;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 8px;
+      padding: 8px 12px;
+      width: 70px;
+      text-align: center;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    
+    .generator-input input[type="number"]:focus {
+      outline: none;
+      border-color: #10b981;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+    }
+    
+    .generator-input label { 
+      color: #a3a3a3;
+      font-size: 0.85em;
+      font-weight: 500;
+    }
+    
+    #compInfo { 
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.15) 100%);
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 1.05em;
+      font-weight: 700;
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+      letter-spacing: 0.5px;
+    }
+
+    /* --- CANVAS AREA --- */
+    .canvas-section {
+      width: 100%;
+      display: flex;
+      gap: 20px;
+    }
+    
+    .main-canvas-area {
+      flex-grow: 1;
+    }
+
+    svg { 
+      width: 100%; 
+      height: 600px; 
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      box-shadow: 
+        0 20px 60px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(16, 185, 129, 0.2),
+        inset 0 1px 0 rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    
+    svg::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        linear-gradient(90deg, rgba(16, 185, 129, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(16, 185, 129, 0.05) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+    }
+    
+    /* --- SIDEBAR --- */
+    #sidebar-guide {
+      width: 350px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .sidebar-section {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .sidebar-section:hover {
+      transform: translateY(-4px);
+      box-shadow: 
+        0 15px 50px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(16, 185, 129, 0.4);
+    }
+    
+    .sidebar-section h3 {
+      color: #10b981;
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 1.2em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .sidebar-section p, .sidebar-section ul {
+      line-height: 1.7;
+      color: #a3a3a3;
+    }
+    
+    .sidebar-section ul {
+      list-style: none;
+      padding-left: 0;
+    }
+    
+    .sidebar-section li {
+      padding: 8px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    
+    .sidebar-section li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: #10b981;
+      font-weight: bold;
+    }
+
+    /* --- BOTTOM INFO PANEL --- */
+    .bottom-info-panel {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      width: 100%;
+      margin-top: 10px;
+    }
+    
+    .info-box {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .info-box::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #10b981, #059669);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .info-box:hover {
+      transform: translateY(-4px);
+      box-shadow: 
+        0 15px 50px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(16, 185, 129, 0.4);
+    }
+    
+    .info-box:hover::before {
+      opacity: 1;
+    }
+    
+    .info-box h3 {
+      color: #10b981;
+      margin-top: 0;
+      margin-bottom: 20px;
+      font-size: 1.2em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    /* Enhanced Stats Styling */
+    .stat-item { 
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.0em;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: rgba(10, 10, 10, 0.6);
+      border-radius: 8px;
+      border-left: 3px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .stat-item:hover {
+      background: rgba(16, 185, 129, 0.1);
+      transform: translateX(4px);
+    }
+    
+    .stat-item span:first-child {
+      color: #a3a3a3;
+    }
+    
+    .stat-item span:last-child { 
+      color: #10b981;
+      font-weight: 700;
+    } 
+    
+    .stat-item.danger {
+      border-left-color: #ef4444;
+    }
+    
+    .stat-item.danger span:last-child { 
+      color: #ef4444;
+    } 
+    
+    .stat-item.safe {
+      border-left-color: #10b981;
+    }
+    
+    .stat-item.safe span:last-child { 
+      color: #10b981;
+    } 
+
+    /* Enhanced Component List/Flight Log Styles */
+    .component-list-item, .log-item {
+      background: rgba(10, 10, 10, 0.7);
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      border-left: 4px solid transparent;
+      position: relative;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    
+    .component-list-item:hover, .log-item:hover {
+      background: rgba(16, 185, 129, 0.15);
+      transform: translateX(4px);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+    }
+    
+    .log-item.hub { 
+      border-left-color: #10b981;
+    } 
+    
+    .log-item.bridge { 
+      border-left-color: #ef4444;
+    } 
+    
+    .component-list-item .item-header { 
+      font-weight: 700;
+      font-size: 1.05em;
+      margin-bottom: 8px;
+      display: block;
+      color: #ffffff;
+    }
+    
+    .component-list-item .btn-focus {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      padding: 6px 14px;
+      font-size: 0.8em;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: #000000;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
+    }
+    
+    .component-list-item .btn-focus:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.5);
+    }
+    
+    .component-list-item .color-swatch { 
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      box-shadow: 0 0 10px currentColor;
+    }
+    
+    .item-info code {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #10b981;
+    }
+
+    /* --- ENHANCED TOOLTIP --- */
+    #tooltip {
+      position: fixed;
+      padding: 12px 16px;
+      background: rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(20px);
+      color: white;
+      border-radius: 12px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 1000;
+      font-size: 0.9em;
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.8),
+        0 0 20px rgba(16, 185, 129, 0.3);
+      transform: translate(15px, 15px);
+      max-width: 250px;
+    }
+    
+    #tooltip strong { 
+      color: #10b981;
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    /* --- SCROLLBAR STYLING --- */
+    .info-box::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .info-box::-webkit-scrollbar-track {
+      background: rgba(10, 10, 10, 0.6);
+      border-radius: 4px;
+    }
+    
+    .info-box::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-radius: 4px;
+    }
+    
+    .info-box::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(135deg, #059669, #047857);
+    }
+    
+    /* --- LOADING INDICATOR --- */
+    #loadingIndicator {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 100;
+    }
+    
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(16, 185, 129, 0.2);
+      border-top: 4px solid #10b981;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    #loadingText {
+      color: #10b981;
+      font-weight: 600;
+      font-size: 1.1em;
+      text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    }
+    
+    /* --- RESPONSIVE DESIGN --- */
+    @media (max-width: 1200px) {
+      .canvas-section {
+        flex-direction: column;
+      }
+      
+      #sidebar-guide {
+        width: 100%;
+      }
+      
+      .bottom-info-panel {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="controls-wrapper">
+  <div class="controls">
+    <button class="btn" onclick="addNode()"><span>✈️ Add Airport</span></button>
+    <button id="edgeModeBtn" onclick="toggleEdgeMode()"><span>🛫 Add Flight Mode</span></button>
+    
+    <div class="generator-input">
+      <input type="number" id="nodeCount" value="8" min="2" max="50">
+      <label for="nodeCount">Nodes</label>
+      <input type="number" id="edgeDensity" value="12" min="1" max="1225">
+      <label for="edgeDensity">Edges</label>
+      <button class="btn-yellow" onclick="generateRandomGraph()"><span>🎲 Generate Network</span></button>
+    </div>
+    
+    <span id="compInfo">SCCs: 0</span>
+    <button class="btn-emerald" onclick="runKosaraju()"><span>🔍 Run SCC Analysis</span></button>
+    <button class="btn-red" onclick="resetAll()"><span>🔄 Reset Network</span></button>
+  </div>
+</div>
+
+<div class="container">
+  <h1>✈️ Flight Route Network Analyzer</h1>
+  
+  <div class="canvas-section">
+    <div class="main-canvas-area">
+      <svg id="canvas">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+          </marker>
+        </defs>
+        <line id="ghostLine" stroke="#10b981" stroke-width="2" opacity="0.6" stroke-dasharray="5,5" visibility="hidden"/>
+        <div id="loadingIndicator">
+          <div class="spinner"></div>
+          <p id="loadingText">Processing...</p>
+        </div>
+      </svg>
+    </div>
+    
+    <div id="sidebar-guide">
+      <div class="sidebar-section">
+        <h3>❓ What is an SCC?</h3>
+        <p>A <strong>Strongly Connected Component (SCC)</strong> is a group of airports where you can always find a return flight path to your starting point, staying <strong>within that group</strong>.</p>
+        <p style="font-size: 0.85em; color: #94a3b8; margin-top: 12px;">Kosaraju's algorithm identifies these self-contained network hubs efficiently.</p>
+      </div>
+      
+      <div class="sidebar-section">
+        <h3>🖱️ Interaction Guide</h3>
+        <ul>
+          <li><strong>Move:</strong> Drag any airport node</li>
+          <li><strong>Add Flight:</strong> Enable flight mode, then click start & end airports</li>
+          <li><strong>Remove Flight:</strong> Click the flight line</li>
+          <li><strong>Focus SCC:</strong> Click an airport after analysis to highlight its component</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-info-panel">
+    <div class="info-box">
+      <h3>📊 Live Statistics</h3>
+      <div class="stat-item"><span>Total Airports (Nodes):</span><span id="stat-airports">0</span></div>
+      <div class="stat-item"><span>Total Flights (Edges):</span><span id="stat-flights">0</span></div>
+      <div class="stat-item"><span>Largest Component Size:</span><span id="stat-largest-scc">0 airports</span></div>
+      <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 15px 0;">
+      <div class="stat-item" id="stat-strong-conn"><span><strong>Strongly Connected:</strong></span><span id="stat-sconn-status">No</span></div>
+      <div class="stat-item" id="stat-weak-conn"><span><strong>Weakly Connected:</strong></span><span id="stat-wconn-status">No</span></div>
+      <div class="stat-item danger"><span>Bridge Edges:</span><span id="stat-bridges">0</span></div>
+    </div>
+
+    <div id="componentListSection" class="info-box" style="overflow-y: auto; max-height: 400px;">
+      <h3>🧩 Connected Components</h3>
+      <div id="componentListContainer">
+        <p style="color: #94a3b8;">Run SCC Analysis to see components here.</p>
+      </div>
+    </div>
+
+    <div id="flightLogSection" class="info-box" style="overflow-y: auto; max-height: 400px;">
+      <h3>✈️ Flight Log (Analysis)</h3>
+      <div id="flightLogList">
+        <p style="color: #94a3b8;">Run SCC Analysis to view flight classifications.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div id="tooltip"></div>
+</div>
+
+<script>
+  const svg = document.getElementById("canvas");
+  const tooltip = document.getElementById("tooltip");
+  const ghostLine = document.getElementById("ghostLine");
+  const loadingIndicator = document.getElementById("loadingIndicator");
+  const loadingText = document.getElementById("loadingText");
+  const nodeCountInput = document.getElementById('nodeCount');
+  const edgeDensityInput = document.getElementById('edgeDensity');
+  const componentListContainer = document.getElementById("componentListContainer");
+  const flightLogList = document.getElementById("flightLogList");
+  
+  // Global State
+  let nodes = [];
+  let edges = [];
+  let nextId = 1;
+  let mode = "none";
+  let edgeFrom = null;
+  let components = {};
+  let compCount = 0;
+  let highlightComp = null;
+  let graphMetrics = { bridges: 0, sConnected: false, wConnected: false };
+
+  // --- UTILITIES & UI ---
+  function colorForComp(c) {
+    const hue = (c * 137.5 + 100) % 360; 
+    return `hsl(${hue},75%,65%)`;
+  }
+
+  function updateStatistics() {
+    document.getElementById('stat-airports').innerText = nodes.length;
+    document.getElementById('stat-flights').innerText = edges.length;
+    
+    let largestSccSize = 0;
+    if (compCount > 0) {
+      const counts = {};
+      Object.values(components).forEach(c => {
+        counts[c] = (counts[c] || 0) + 1;
+      });
+      largestSccSize = Math.max(0, ...Object.values(counts));
+    }
+    document.getElementById('stat-largest-scc').innerText = `${largestSccSize} airports`;
+    
+    // Advanced Metrics
+    document.getElementById('stat-bridges').innerText = graphMetrics.bridges;
+    
+    const sConnStatus = document.getElementById('stat-sconn-status');
+    sConnStatus.innerText = graphMetrics.sConnected ? "Yes" : "No";
+    sConnStatus.parentElement.classList.toggle('safe', graphMetrics.sConnected);
+    
+    const wConnStatus = document.getElementById('stat-wconn-status');
+    wConnStatus.innerText = graphMetrics.wConnected ? "Yes" : "No";
+    wConnStatus.parentElement.classList.toggle('safe', graphMetrics.wConnected);
+  }
+  
+  function setControlsDisabled(disabled, message = "Processing...") {
+    const buttons = document.querySelectorAll('.controls button');
+    buttons.forEach(btn => {
+      btn.disabled = disabled;
+    });
+    loadingText.innerText = message;
+    loadingIndicator.style.display = disabled ? 'flex' : 'none'; 
+  }
+
+  // --- GRAPH MANIPULATION ---
+  function resetAll() {
+    nodes = [];
+    edges = [];
+    clearAnalysis(); 
+    nextId = 1;
+    mode = "none";
+    edgeFrom = null;
+    document.getElementById("edgeModeBtn").classList.remove("active");
+    ghostLine.setAttribute('visibility', 'hidden');
+    draw(); 
+  }
+  
+  function clearAnalysis() {
+    components = {};
+    compCount = 0;
+    highlightComp = null;
+    graphMetrics = { bridges: 0, sConnected: false, wConnected: false };
+    document.getElementById("compInfo").innerText = "SCCs: 0";
+    
+    // Clear info boxes
+    componentListContainer.innerHTML = '<p style="color: #94a3b8;">Run SCC Analysis to see components here.</p>';
+    flightLogList.innerHTML = '<p style="color: #94a3b8;">Run SCC Analysis to view flight classifications.</p>';
+  }
+
+  function addNode() {
+    const rect = svg.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    nodes.push({ id: `A${nextId}`, x: w / 2 + Math.random() * 100 - 50, y: h / 2 + Math.random() * 100 - 50, inDegree: 0, outDegree: 0 });
+    nextId++;
+    clearAnalysis(); 
+    draw();
+  }
+  
+  function toggleEdgeMode() {
+    if (nodes.length < 2) {
+      alert("Need at least two airports to add a flight.");
+      return;
+    }
+    mode = mode === "addEdge" ? "none" : "addEdge";
+    document.getElementById("edgeModeBtn").classList.toggle("active", mode === "addEdge");
+    if (mode === "none") {
+      edgeFrom = null; 
+      ghostLine.setAttribute('visibility', 'hidden'); 
+      draw(); 
+    }
+  }
+
+  // --- RANDOM GENERATOR LOGIC ---
+  function generateRandomGraph() {
+    setControlsDisabled(true, "Generating network...");
+    
+    resetAll(); 
+
+    const nodeCount = parseInt(nodeCountInput.value) || 8;
+    const edgeDensity = parseInt(edgeDensityInput.value) || 12;
+
+    const maxPossibleEdges = nodeCount * (nodeCount - 1);
+    if (nodeCount < 2 || nodeCount > 50) { 
+      alert("Node count must be between 2 and 50.");
+      setControlsDisabled(false);
+      return;
+    }
+    if (edgeDensity < 1 || edgeDensity > maxPossibleEdges) { 
+      alert(`Edge count must be between 1 and ${maxPossibleEdges}.`);
+      setControlsDisabled(false);
+      return;
+    }
+    
+    const rect = svg.getBoundingClientRect();
+    const w = rect.width;
+    const h = rect.height;
+    const padding = 100;
+    
+    for (let i = 0; i < nodeCount; i++) {
+      nodes.push({ 
+        id: `A${nextId}`, 
+        x: padding + Math.random() * (w - 2 * padding), 
+        y: padding + Math.random() * (h - 2 * padding),
+        inDegree: 0, 
+        outDegree: 0
+      });
+      nextId++;
+    }
+
+    const nodeIds = nodes.map(n => n.id);
+    let currentEdges = 0;
+
+    while (currentEdges < edgeDensity) {
+      const fromIndex = Math.floor(Math.random() * nodeCount);
+      let toIndex = Math.floor(Math.random() * nodeCount);
+      
+      if (fromIndex === toIndex) continue;
+
+      const fromId = nodeIds[fromIndex];
+      const toId = nodeIds[toIndex];
+
+      const exists = edges.some(e => e.from === fromId && e.to === toId);
+      if (exists) continue;
+
+      edges.push({ from: fromId, to: toId });
+      currentEdges++;
+    }
+
+    edgeDensityInput.setAttribute('max', maxPossibleEdges);
+
+    clearAnalysis();
+    draw();
+    setControlsDisabled(false);
+  }
+
+  // --- CORE ALGORITHM ---
+  function runKosaraju() {
+    if (nodes.length === 0) {
+      alert("Add airports before running analysis.");
+      return;
+    }
+
+    setControlsDisabled(true, "Running SCC Analysis...");
+    
+    // 1. Prepare Adjacency Lists and degrees
+    const adj = {};
+    const tadj = {};
+    nodes.forEach(n => {
+      adj[n.id] = [];
+      tadj[n.id] = [];
+      n.inDegree = 0;
+      n.outDegree = 0;
+    });
+
+    edges.forEach(e => {
+      adj[e.from].push(e.to);
+      tadj[e.to].push(e.from);
+      const fromNode = nodes.find(n => n.id === e.from);
+      const toNode = nodes.find(n => n.id === e.to);
+      if(fromNode) fromNode.outDegree++;
+      if(toNode) toNode.inDegree++;
+    });
+
+    // 2. First DFS (Compute Finishing Order)
+    const visited = new Set();
+    const order = [];
+    function dfs(u) {
+      visited.add(u);
+      adj[u].forEach(v => { if (!visited.has(v)) dfs(v); });
+      order.push(u);
+    }
+    nodes.forEach(n => { if (!visited.has(n.id)) dfs(n.id); });
+
+    // 3. Second DFS (Find Components)
+    visited.clear();
+    components = {};
+    let compId = 0;
+    function dfs2(u) {
+      visited.add(u);
+      components[u] = compId;
+      tadj[u].forEach(v => { if (!visited.has(v)) dfs2(v); });
+    }
+    for (let i = order.length - 1; i >= 0; i--) {
+      const u = order[i];
+      if (!visited.has(u)) {
+        dfs2(u);
+        compId++;
+      }
+    }
+    compCount = compId;
+    
+    // 4. Calculate Bridge Edges & Connectivity
+    let bridges = 0;
+    edges.forEach(e => {
+      if (components[e.from] !== components[e.to]) {
+        bridges++;
+      }
+    });
+    graphMetrics.bridges = bridges;
+    
+    graphMetrics.sConnected = (compCount === 1 && nodes.length > 0);
+    
+    const undirVisited = new Set();
+    let wCompCount = 0;
+    function undirDFS(u, undirectedAdj) {
+      undirVisited.add(u);
+      undirectedAdj[u].forEach(v => { if (!undirVisited.has(v)) undirDFS(v, undirectedAdj); });
+    }
+
+    const undirectedAdj = {};
+    nodes.forEach(n => undirectedAdj[n.id] = new Set());
+    edges.forEach(e => {
+      undirectedAdj[e.from].add(e.to);
+      undirectedAdj[e.to].add(e.from);
+    });
+
+    nodes.forEach(n => {
+      if (!undirVisited.has(n.id)) {
+        undirDFS(n.id, undirectedAdj);
+        wCompCount++;
+      }
+    });
+    graphMetrics.wConnected = (wCompCount === 1 && nodes.length > 0);
+
+    // Finalize
+    highlightComp = null;
+    document.getElementById("compInfo").innerText = "SCCs: " + compCount;
+    
+    // Update info boxes
+    updateComponentList();
+    updateFlightLog();
+    
+    draw(); 
+    setControlsDisabled(false);
+  }
+
+  // --- BOTTOM INFO UPDATES ---
+  function updateComponentList() {
+    componentListContainer.innerHTML = ""; 
+    if (compCount === 0) {
+      componentListContainer.innerHTML = '<p style="color: #94a3b8;">No components found. Run analysis.</p>';
+      return;
+    }
+    
+    for (let i = 0; i < compCount; i++) {
+      const compId = i;
+      const nodesInComp = nodes.filter(n => components[n.id] === compId);
+      if (nodesInComp.length === 0) continue; 
+      
+      const nodeIds = nodesInComp.map(n => n.id).join(', ');
+      const color = colorForComp(compId);
+      
+      const item = document.createElement('div');
+      item.className = 'component-list-item';
+      item.innerHTML = `
+        <span class="color-swatch" style="background-color: ${color};"></span>
+        <span class="item-header">Component ${compId + 1} (${nodesInComp.length} airports)</span>
+        <button class="btn-focus" onclick="focusComponent(${compId})">Focus</button>
+        <div class="item-info" style="font-size: 0.9em; color: #94a3b8; margin-top: 8px;">
+          Members: <code>${nodeIds}</code>
+        </div>
+      `;
+      componentListContainer.appendChild(item);
+    }
+  }
+  
+  function updateFlightLog() {
+    flightLogList.innerHTML = "";
+    
+    if (edges.length === 0) {
+      flightLogList.innerHTML = '<p style="color: #94a3b8;">No flights to analyze.</p>';
+      return;
+    }
+
+    let intraFlights = [];
+    let interFlights = [];
+    
+    edges.forEach(e => {
+      const compFrom = components[e.from];
+      const compTo = components[e.to];
+      
+      const flightData = { from: e.from, to: e.to, compFrom: compFrom, compTo: compTo };
+      
+      if (compFrom !== undefined && compFrom === compTo) { 
+        intraFlights.push(flightData);
+      } else {
+        interFlights.push(flightData);
+      }
+    });
+    
+    flightLogList.innerHTML += `<h4 style="color: #10b981; margin: 10px 0 15px; font-size: 1em;">🟢 Hub Flights (${intraFlights.length})</h4>`;
+    if (intraFlights.length > 0) {
+      intraFlights.forEach(f => {
+        flightLogList.innerHTML += `<div class="log-item hub"><strong>${f.from} → ${f.to}</strong><span style="display: block; font-size: 0.85em; color: #94a3b8; margin-top: 4px;">Internal to Component ${f.compFrom + 1}</span></div>`;
+      });
+    } else {
+      flightLogList.innerHTML += '<p style="color: #94a3b8; margin-left: 12px; font-size: 0.9em;">No hub flights</p>';
+    }
+    
+    flightLogList.innerHTML += `<h4 style="color: #ef4444; margin: 20px 0 15px; font-size: 1em;">🔴 Bridge Flights (${interFlights.length})</h4>`;
+    if (interFlights.length > 0) {
+      interFlights.forEach(f => {
+        const fromComp = f.compFrom !== undefined ? `Comp ${f.compFrom + 1}` : 'N/A';
+        const toComp = f.compTo !== undefined ? `Comp ${f.compTo + 1}` : 'N/A';
+        flightLogList.innerHTML += `<div class="log-item bridge"><strong>${f.from} → ${f.to}</strong><span style="display: block; font-size: 0.85em; color: #94a3b8; margin-top: 4px;">${fromComp} → ${toComp}</span></div>`;
+      });
+    } else {
+      flightLogList.innerHTML += '<p style="color: #94a3b8; margin-left: 12px; font-size: 0.9em;">No bridge flights</p>';
+    }
+  }
+  
+  function focusComponent(compId) {
+    highlightComp = compId;
+    draw();
+  }
+  
+  // --- DRAWING AND INTERACTIVITY ---
+  function draw() {
+    // Redraw logic
+    const keep = new Set(svg.querySelectorAll('defs, #ghostLine, #loadingIndicator'));
+    Array.from(svg.children).forEach(child => {
+      if (!keep.has(child)) svg.removeChild(child);
+    });
+    
+    // Draw Edges 
+    edges.forEach(e => {
+      const from = nodes.find(n => n.id === e.from);
+      const to = nodes.find(n => n.id === e.to);
+      if (!from || !to) return;
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const dist = Math.hypot(dx, dy);
+      const r = 25; 
+      
+      const sx = from.x + (dx/dist)*r;
+      const sy = from.y + (dy/dist)*r;
+      const tx = to.x - (dx/dist)*r;
+      const ty = to.y - (dy/dist)*r;
+      
+      const isSameComp = components[e.from] != null && components[e.from] === components[e.to];
+      const isBridge = components[e.from] !== components[e.to];
+      
+      const color = isSameComp ? colorForComp(components[e.from]) : (isBridge ? "#ef4444" : "#525252");
+      
+      const isHighlighted = highlightComp == null || components[e.from] === highlightComp || components[e.to] === highlightComp;
+      const op = isHighlighted ? 0.9 : 0.15;
+      
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", sx); line.setAttribute("y1", sy);
+      line.setAttribute("x2", tx); line.setAttribute("y2", ty);
+      line.setAttribute("stroke", color); 
+      line.setAttribute("stroke-width", isHighlighted ? 3 : 2);
+      line.setAttribute("marker-end", "url(#arrow)");
+      line.setAttribute("opacity", op);
+      line.style.cursor = "pointer";
+      line.style.transition = "all 0.3s ease";
+      line.onmousemove = (ev) => showEdgeTooltip(ev, e.from, e.to, isBridge);
+      line.onmouseout = hideTooltip;
+      line.onclick = (event) => { 
+        event.stopPropagation();
+        edges = edges.filter(ed => ed !== e); 
+        clearAnalysis(); 
+        draw(); 
+      };
+      svg.appendChild(line);
+    });
+    
+    // Draw Nodes 
+    nodes.forEach(n => {
+      const comp = components[n.id];
+      const color = comp != null ? colorForComp(comp) : "#10b981"; 
+      const isHighlighted = highlightComp == null || components[e.from] === highlightComp || components[e.to] === highlightComp;
+      const strokeColor = (n.id === edgeFrom) ? "#10b981" : (isHighlighted ? "#ffffff" : "#525252");
+      const opacity = isHighlighted ? 1 : 0.25;
+
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", n.x); circle.setAttribute("cy", n.y);
+      circle.setAttribute("r", 25);
+      circle.setAttribute("fill", color);
+      circle.setAttribute("stroke", strokeColor);
+      circle.setAttribute("stroke-width", (n.id === edgeFrom) ? 4 : 2.5);
+      circle.style.opacity = opacity;
+      circle.style.cursor = "pointer";
+      circle.style.transition = "all 0.3s ease";
+      circle.style.filter = isHighlighted ? "drop-shadow(0 0 10px rgba(16, 185, 129, 0.6))" : "none";
+      circle.onmousedown = (ev) => startDrag(ev, n);
+      circle.onclick = (ev) => handleClickNode(ev, n);
+      circle.onmousemove = (ev) => showNodeTooltip(ev, n); 
+      circle.onmouseout = hideTooltip;
+      svg.appendChild(circle);
+
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", n.x); text.setAttribute("y", n.y + 6);
+      text.setAttribute("text-anchor", "middle"); 
+      text.textContent = n.id;
+      text.setAttribute("fill", "#000000"); 
+      text.setAttribute("font-size", "14"); 
+      text.setAttribute("font-weight", "700");
+      text.style.pointerEvents = "none"; 
+      svg.appendChild(text);
+    });
+    
+    updateStatistics();
+  }
+
+  // --- DRAG HANDLERS ---
+  let drag = null;
+  let isDragging = false; 
+
+  function startDrag(e, n) { 
+    if (mode !== "addEdge") { 
+      drag = n; 
+      isDragging = false; 
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }
+  
+  svg.addEventListener("mousemove", e => {
+    const rect = svg.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (mode === 'addEdge' && edgeFrom) {
+      const fromNode = nodes.find(n => n.id === edgeFrom);
+      ghostLine.setAttribute('x1', fromNode.x);
+      ghostLine.setAttribute('y1', fromNode.y);
+      ghostLine.setAttribute('x2', x);
+      ghostLine.setAttribute('y2', y);
+    }
+    
+    if (!drag) return;
+    isDragging = true; 
+    drag.x = Math.max(25, Math.min(x, rect.width - 25));
+    drag.y = Math.max(25, Math.min(y, rect.height - 25));
+    draw();
+  });
+
+  svg.addEventListener("mouseup", () => {
+    drag = null;
+  });
+
+  function handleClickNode(e, n) {
+    e.stopPropagation();
+    
+    if (isDragging) {
+      isDragging = false; 
+      return; 
+    }
+
+    if (mode === "addEdge") {
+      if (edgeFrom && edgeFrom !== n.id) {
+        const exists = edges.some(ed => ed.from === edgeFrom && ed.to === n.id);
+        if (!exists) {
+          edges.push({ from: edgeFrom, to: n.id });
+        }
+        edgeFrom = null;
+        mode = "none";
+        document.getElementById("edgeModeBtn").classList.remove("active");
+        ghostLine.setAttribute('visibility', 'hidden');
+        clearAnalysis(); 
+        draw();
+      } else if (edgeFrom === n.id) {
+        edgeFrom = null;
+        ghostLine.setAttribute('visibility', 'hidden');
+        draw();
+      } else {
+        edgeFrom = n.id;
+        ghostLine.setAttribute('visibility', 'visible');
+      ghostLine.setAttribute('stroke', '#10b981');
+        draw();
+      }
+    } else {
+      const comp = components[n.id];
+      highlightComp = comp === highlightComp ? null : comp;
+      draw();
+    }
+  }
+  
+  // --- TOOLTIP ---
+  function showNodeTooltip(e, n) {
+    const comp = components[n.id];
+    const sccInfo = comp != null ? `Component ${comp + 1}` : 'Not analyzed';
+    tooltip.innerHTML = `
+      <strong>Airport: ${n.id}</strong>
+      <div style="margin-top: 6px; line-height: 1.6;">
+        <div>📍 SCC: ${sccInfo}</div>
+        <div>⬇️ In-Flights: ${n.inDegree}</div>
+        <div>⬆️ Out-Flights: ${n.outDegree}</div>
+      </div>
+    `;
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = e.clientY + 'px';
+    tooltip.style.opacity = 1;
+  }
+  
+    function showEdgeTooltip(e, fromId, toId, isBridge) {
+    tooltip.innerHTML = `
+      <strong>Flight Route</strong>
+      <div style="margin-top: 6px; line-height: 1.6;">
+        <div>✈️ ${fromId} → ${toId}</div>
+        <div style="margin-top: 4px; ${isBridge ? 'color: #ef4444;' : 'color: #10b981;'}">
+          ${isBridge ? '🔴 Bridge Flight' : '🟢 Hub Flight'}
+        </div>
+      </div>
+    `;
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = e.clientY + 'px';
+    tooltip.style.opacity = 1;
+  }
+
+  function hideTooltip() {
+    tooltip.style.opacity = 0;
+  }
+
+  // Initial draw
+  draw();
+</script>
+</body>
+</html>
